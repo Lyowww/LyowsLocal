@@ -1,0 +1,293 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                          String               @id @default(auto()) @map("_id") @db.ObjectId
+  telegramId                  String               @unique
+  name                        String?
+  isPremium                   Boolean              @default(false)
+  points                      Float                @default(0)
+  pointsBalance               Float                @default(0)
+  multitapLevelIndex          Int                  @default(0)
+  energy                      Int                  @default(100)
+  energyRefillsLeft           Int                  @default(6)
+  energyLimitLevelIndex       Int                  @default(0)
+  mineLevelIndex              Int                  @default(0)
+  lastPointsUpdateTimestamp   DateTime             @default(now())
+  lastEnergyUpdateTimestamp   DateTime             @default(now())
+  lastEnergyRefillsTimestamp  DateTime             @default(now())
+  tonWalletAddress            String?
+  referralPointsEarned        Float                @default(0)
+  offlinePointsEarned         Float                @default(0)
+  // Relation fields
+  referrals                   User[]               @relation("Referrals")
+  referredBy                  User?                @relation("Referrals", fields: [referredById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  referredById                String?              @db.ObjectId
+  // Tasks
+  completedTasks              UserTask[]
+  // Upgrades
+  userUpgrades                UserUpgrade[]
+  // Yield per hour
+  yieldPerHour                Float                @default(0)
+  bonusYieldPerHour           Float                @default(0)
+  bonusOfflineYieldDuration   Int                  @default(0)
+  lastUpgradeYieldTimestamp   DateTime             @default(now())
+  // Daily Rewards
+  lastClaimRewardTimestamp    DateTime             @default(now())
+  lastClaimRewardDay          Int                  @default(0)
+  // Profile
+  twitterHandle               String?
+  twitterId                   String?
+  erc20Wallet                 String?
+  // Inventory
+  inventory                   UserInventory?       @relation("User Inventory")
+  // last active timestamp
+  lastActiveTimestamp         DateTime?
+  lastOnlineTimestamp         DateTime?
+  // giveaway submissions
+  giveawaySubmissions         GiveawaySubmission[]
+  UserAirdrop                 UserAirdrop[]
+  // last HolderCheck timestamp
+  lastHolderCheckTimestamp    DateTime?
+  isHolder                    Boolean              @default(false)
+  holderLevel                 Int                  @default(0)
+  // airdrop requirement
+  isAirdropRequirementMet     Boolean?             @default(false)
+  // Fake friends
+  fakeFriends                 Int?
+  // Boost tracking
+  activeOfflineBoostEndTime   DateTime? // When the offline boost expires
+  activeRewardBoostEndTime    DateTime? // When the reward boost expires
+  activeOfflineBoostDuration  Int? // Current active offline boost duration in hours
+  activeRewardBoostMultiplier Float? // Current active reward boost multiplier (e.g., 0.5 for 50%)
+  // Star-related fields
+  totalStars                  Int                  @default(0) // Total stars available to the user
+  earnedStars                 Int                  @default(0) // Stars earned through quests
+  // Transaction history
+  transactions                Transaction[]
+}
+
+model Transaction {
+  id          String            @id @default(auto()) @map("_id") @db.ObjectId
+  createdAt   DateTime          @default(now())
+  status      TransactionStatus @default(PENDING)
+  userId      String            @db.ObjectId
+  user        User              @relation(fields: [userId], references: [id])
+  amount      Int               @default(0)
+  type        TransactionType
+  invoiceUrl  String?
+  description String?
+  sourceId    String?           @db.ObjectId // ID of the quest or product related to this transaction
+  updatedAt   DateTime          @updatedAt
+}
+
+model Task {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  title        String
+  description  String
+  points       Int?
+  multiplier   Float?
+  rewardStars  Int?
+  type         TaskType
+  image        String
+  callToAction String
+  taskData     Json?
+  isActive     Boolean    @default(true)
+  deletedAt    DateTime?
+  isDeleted    Boolean    @default(false)
+  taskAction   TaskAction @relation(fields: [taskActionId], references: [id])
+  taskActionId String     @db.ObjectId
+  userTasks    UserTask[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model UserTask {
+  id                 String    @id @default(auto()) @map("_id") @db.ObjectId
+  user               User      @relation(fields: [userId], references: [id])
+  userId             String    @db.ObjectId
+  task               Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId             String    @db.ObjectId
+  taskStartTimestamp DateTime  @default(now())
+  isCompleted        Boolean   @default(false)
+  completedAt        DateTime?
+  updatedAt          DateTime  @updatedAt
+  submissionUrl      String? // field to store the social media post url; twitter url
+}
+
+model TaskAction {
+  id    String @id @default(auto()) @map("_id") @db.ObjectId
+  name  String @unique // Will contain: VISIT, TELEGRAM, TWITTER, REFERRAL
+  tasks Task[]
+}
+
+model Upgrade {
+  id                 String              @id @default(auto()) @map("_id") @db.ObjectId
+  name               String
+  description        String
+  baseCost           Int
+  basePoints         Int
+  category           String
+  subcategory        String
+  userUpgrades       UserUpgrade[]
+  image              String?
+  srNo               String?
+  unlockRequirements UnlockRequirement[] @relation("RequiredUpgrade")
+  requiredBy         UnlockRequirement[] // Virtual field for back-reference
+}
+
+model UnlockRequirement {
+  id                String  @id @default(auto()) @map("_id") @db.ObjectId
+  upgrade           Upgrade @relation(fields: [upgradeId], references: [id], onDelete: Cascade)
+  upgradeId         String  @db.ObjectId // The upgrade that has this requirement
+  requiredUpgrade   Upgrade @relation("RequiredUpgrade", fields: [requiredUpgradeId], references: [id], onDelete: Cascade)
+  requiredUpgradeId String  @db.ObjectId // ID of the required upgrade
+  requiredLevel     Int // Level required to unlock the current upgrade
+}
+
+model UserUpgrade {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String    @db.ObjectId
+  upgrade        Upgrade   @relation(fields: [upgradeId], references: [id], onDelete: Cascade)
+  upgradeId      String    @db.ObjectId
+  level          Int       @default(0)
+  acquiredAt     DateTime  @default(now())
+  cooldownEndsAt DateTime?
+
+  @@unique([userId, upgradeId])
+}
+
+model Partner {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  name        String  @unique
+  description String
+  image       String
+  link        String
+  isActive    Boolean @default(true)
+}
+
+model ShopItem {
+  id                 String              @id @default(auto()) @map("_id") @db.ObjectId
+  name               String
+  description        String
+  category           ShopCategory
+  price              Int // in stars
+  image              String
+  isBasic            Boolean             @default(false)
+  invoiceUrl         String?
+  level              Int? // Optional: for basic avatar & background
+  // Boost specific fields
+  boostDuration      Float? // in hours
+  boostType          String? // e.g., "offline", "rewards"
+  boostReward        Float? // e.g., 50 for 50% boost
+  // Relation to UserInventoryItem
+  userInventoryItems UserInventoryItem[]
+}
+
+model UserInventory {
+  id                 String              @id @default(auto()) @map("_id") @db.ObjectId
+  user               User                @relation("User Inventory", fields: [userId], references: [id], onDelete: Cascade)
+  userId             String              @db.ObjectId
+  equippedAvatar     String?
+  equippedBackground String?
+  // Relation to UserInventoryItem
+  items              UserInventoryItem[]
+
+  @@unique([userId])
+}
+
+model UserInventoryItem {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  userInventory   UserInventory @relation(fields: [userInventoryId], references: [id], onDelete: Cascade)
+  userInventoryId String        @db.ObjectId
+  shopItem        ShopItem      @relation(fields: [shopItemId], references: [id], onDelete: Cascade)
+  shopItemId      String        @db.ObjectId
+  quantity        Int           @default(1) // Optional: to track how many of each item the user has
+  createdAt       DateTime      @default(now())
+  usedAt          DateTime?
+
+  @@unique([userInventoryId, shopItemId])
+}
+
+model AdminUser {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  username     String   @unique
+  passwordHash String
+  firstName    String?
+  lastName     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model GiveawaySubmission {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  link      String
+  createdAt DateTime @default(now())
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model OnchainTask {
+  id                   String  @id @default(auto()) @map("_id") @db.ObjectId
+  smartContractAddress String
+  price                String
+  collectionMetadata   Json
+  itemMetadata         Json
+  points               Float
+  isActive             Boolean @default(true)
+
+  completions OnchainTaskCompletion[]
+}
+
+model OnchainTaskCompletion {
+  id                String      @id @default(auto()) @map("_id") @db.ObjectId
+  onchainTask       OnchainTask @relation(fields: [onchainTaskId], references: [id])
+  onchainTaskId     String      @db.ObjectId
+  userId            String      @db.ObjectId
+  userWalletAddress String
+  completionTime    DateTime    @default(now())
+}
+
+model UserAirdrop {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  telegramId     String?
+  username       String?
+  equippedAvatar String?
+  price          Float
+  priceInTon     Float
+  createdAt      DateTime @default(now())
+  isFake         Boolean  @default(false)
+  userId         String?  @db.ObjectId
+  user           User?    @relation(fields: [userId], references: [id])
+}
+
+enum TaskType {
+  DAILY
+  OFFICIAL
+  TEMPORARY
+}
+
+enum ShopCategory {
+  AVATAR
+  BACKGROUND
+  BOOST
+  OTHERS
+}
+
+enum TransactionType {
+  DEPOSIT // User deposited Telegram Stars
+  EARNED // User earned stars from quests
+  SHOP // User spent stars on purchases
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+}
