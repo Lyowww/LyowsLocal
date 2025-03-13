@@ -1,5 +1,3 @@
-// app/api/tg-web/route.ts
-
 import { TELEGRAM_BOT_AUTO_REPLY } from '@/utils/consts';
 import { NextResponse } from 'next/server';
 
@@ -62,13 +60,14 @@ async function handlePreCheckoutQuery(preCheckoutQuery: any) {
 
 async function handleMessage(message: any) {
   if (message.text) {
+    // Use sendMessageToUser directly here
     await sendMessageToUser(message.chat.id);
   } else {
     console.log('Unhandled message:', message.text);
   }
 }
 
-export async function sendMessageToUser(chatId: number, text?: string) {
+async function sendMessageToUser(chatId: number, text?: string) {
   const formdata = new FormData();
   formdata.append('chat_id', chatId.toString());
   formdata.append('text', text || TELEGRAM_BOT_AUTO_REPLY);

@@ -8,6 +8,9 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  experimental: {
+    appDir: true,
+  },
   webpack(config) {
     config.module.rules.push({
       test: /\.(mp4|webm|ogg|mov)$/,

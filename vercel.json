@@ -1,0 +1,16 @@
+{
+    "version": 2,
+    "builds": [
+      {
+        "src": "~/app/api/tg-web/route.ts",
+        "use": "@vercel/node"
+      }
+    ],
+    "routes": [
+      {
+        "src": "/api/tg-web",
+        "dest": "~/app/api/tg-web/route.ts"
+      }
+    ]
+  }
+  
